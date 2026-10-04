@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+captures/
+reports/
+config/tray_calibration.json
+*.pt
+*.onnx
+
