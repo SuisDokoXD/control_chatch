@@ -1,0 +1,13 @@
+{
+  "objects": {
+    "cube": {
+      "shape": "cube",
+      "height_mm": null
+    },
+    "cylinder": {
+      "shape": "cylinder",
+      "height_mm": null
+    }
+  }
+}
+
