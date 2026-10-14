@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 .venv/
 captures/
+dataset/
 reports/
 config/tray_calibration.json
 *.pt
