@@ -48,6 +48,8 @@ py -m venv .venv
 .\.venv\Scripts\python.exe mvp_single_camera.py --image .\captures\test.jpg --headless --weights .\yolo11n.pt
 ```
 
+相机参数模板保存在 `config/camera_settings.json`。程序默认只设置分辨率、帧率和 MJPG，不修改曝光、增益或白平衡。摆好垂直相机后，明确加入 `--apply-camera-settings` 才会应用模板中的参数；最终值需要根据托盘和物块画面复核。
+
 标定结果保存在 `config/tray_calibration.json`，识别结果保存在 `reports/latest_detections.json`。标定文件被 `.gitignore` 忽略，因为它属于现场设备参数。
 
 ## 当前输出

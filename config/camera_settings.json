@@ -1,0 +1,11 @@
+{
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "fourcc": "MJPG",
+  "auto_exposure": false,
+  "exposure": -6,
+  "gain": null,
+  "auto_white_balance": false,
+  "white_balance": 4600
+}

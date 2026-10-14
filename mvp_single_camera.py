@@ -20,6 +20,7 @@ except ModuleNotFoundError as exc:
 ROOT = Path(__file__).resolve().parent
 CALIBRATION_PATH = ROOT / "config" / "tray_calibration.json"
 OBJECTS_PATH = ROOT / "config" / "objects.json"
+CAMERA_SETTINGS_PATH = ROOT / "config" / "camera_settings.json"
 REPORT_PATH = ROOT / "reports" / "latest_detections.json"
 CAPTURE_DIR = ROOT / "captures"
 
@@ -96,6 +97,49 @@ def object_heights(path: Path) -> dict[str, float]:
             except (TypeError, ValueError):
                 continue
     return result
+
+
+def apply_camera_settings(camera: Any, settings_path: Path) -> dict[str, Any]:
+    """Apply reproducible DirectShow settings and return read-back values."""
+    settings = load_json(
+        settings_path,
+        {
+            "width": 1920,
+            "height": 1080,
+            "fps": 30,
+            "fourcc": "MJPG",
+            "auto_exposure": False,
+            "exposure": -6,
+            "gain": None,
+            "auto_white_balance": False,
+            "white_balance": 4600,
+        },
+    )
+    fourcc = str(settings.get("fourcc", "MJPG"))[:4].ljust(4, " ")
+    camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc))
+    camera.set(cv2.CAP_PROP_FRAME_WIDTH, float(settings.get("width", 1920)))
+    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, float(settings.get("height", 1080)))
+    camera.set(cv2.CAP_PROP_FPS, float(settings.get("fps", 30)))
+    if settings.get("auto_exposure") is not None:
+        camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75 if settings["auto_exposure"] else 0.25)
+    if settings.get("exposure") is not None:
+        camera.set(cv2.CAP_PROP_EXPOSURE, float(settings["exposure"]))
+    if settings.get("gain") is not None:
+        camera.set(cv2.CAP_PROP_GAIN, float(settings["gain"]))
+    if settings.get("auto_white_balance") is not None:
+        camera.set(cv2.CAP_PROP_AUTO_WB, 1 if settings["auto_white_balance"] else 0)
+    if settings.get("white_balance") is not None:
+        camera.set(cv2.CAP_PROP_WB_TEMPERATURE, float(settings["white_balance"]))
+    return {
+        "width": camera.get(cv2.CAP_PROP_FRAME_WIDTH),
+        "height": camera.get(cv2.CAP_PROP_FRAME_HEIGHT),
+        "fps": camera.get(cv2.CAP_PROP_FPS),
+        "auto_exposure": camera.get(cv2.CAP_PROP_AUTO_EXPOSURE),
+        "exposure": camera.get(cv2.CAP_PROP_EXPOSURE),
+        "gain": camera.get(cv2.CAP_PROP_GAIN),
+        "auto_white_balance": camera.get(cv2.CAP_PROP_AUTO_WB),
+        "white_balance": camera.get(cv2.CAP_PROP_WB_TEMPERATURE),
+    }
 
 
 def calibrate(frame: np.ndarray, tray_width_mm: float, tray_height_mm: float) -> np.ndarray | None:
@@ -209,6 +253,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--headless", action="store_true", help="不打开窗口，适合离线检查")
     parser.add_argument("--frames", type=int, default=0, help="无窗口读取指定帧数；用于相机连通性测试")
     parser.add_argument("--snapshot", type=Path, help="无窗口采集时保存最后一帧")
+    parser.add_argument("--apply-camera-settings", action="store_true", help="明确要求应用 config/camera_settings.json")
     parser.add_argument("--self-test", action="store_true", help="运行逻辑自检后退出")
     return parser.parse_args()
 
@@ -270,10 +315,20 @@ def main() -> int:
 
     backend = cv2.CAP_DSHOW if hasattr(cv2, "CAP_DSHOW") else 0
     camera = cv2.VideoCapture(args.camera, backend)
-    camera.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-    camera.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-    camera.set(cv2.CAP_PROP_FPS, args.fps)
-    camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    if args.apply_camera_settings:
+        settings = load_json(CAMERA_SETTINGS_PATH, {})
+        settings.update({"width": args.width, "height": args.height, "fps": args.fps})
+        temporary_settings_path = ROOT / "config" / ".camera_settings_runtime.json"
+        save_json(temporary_settings_path, settings)
+        readback = apply_camera_settings(camera, temporary_settings_path)
+        temporary_settings_path.unlink(missing_ok=True)
+        print(f"已应用相机参数: {readback}")
+    else:
+        camera.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        camera.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+        camera.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
+        camera.set(cv2.CAP_PROP_FPS, args.fps)
+        print("仅设置分辨率/帧率，未修改曝光、增益或白平衡。")
     if not camera.isOpened():
         print(f"无法打开摄像头编号 {args.camera}。可先运行 camera_probe.py 检查设备。")
         return 2
