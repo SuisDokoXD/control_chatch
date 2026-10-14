@@ -16,7 +16,7 @@
 
 也可以直接双击项目根目录的 `启动数据集采集.cmd`，或运行 `启动数据集采集.ps1`；两者都会启动 `cube` 类别采集。
 
-窗口中按 `1`～`9` 选择类别，按空格保存，按 `N` 新增类别，按 `Q` 退出。照片会保存到 `dataset/raw/类别名/`，并写入 `dataset/raw/采集记录.csv`。多个类别可写成 `--classes cube,cylinder,sphere`。
+窗口中按 `1`～`9` 选择类别，按空格保存，按 `N` 新增类别，按 `Q` 退出。默认照片会保存到 `dataset/yolo_cube/images/raw/`，文件名格式为 `cube_0001.jpg`、`cube_0002.jpg`，并写入 `dataset/yolo_cube/images/raw/采集记录.csv`。程序还会提前创建 `images/train`、`images/val`、`images/test` 和对应的 `labels` 目录。多个类别可写成 `--classes cube,cylinder,sphere`。
 
 ## 安装
 

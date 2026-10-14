@@ -23,7 +23,7 @@ def load_json(path: Path, default: dict) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="按类别快捷拍照并自动归档")
     parser.add_argument("--classes", default="cube", help="逗号分隔类别，最多9个")
-    parser.add_argument("--output", type=Path, default=ROOT / "dataset" / "raw")
+    parser.add_argument("--output", type=Path, default=ROOT / "dataset" / "yolo_cube" / "images" / "raw")
     parser.add_argument("--camera", type=int, default=None)
     parser.add_argument("--role", default="vertical")
     args = parser.parse_args()
@@ -42,6 +42,17 @@ def main() -> int:
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(settings.get("height", 1080)))
     cap.set(cv2.CAP_PROP_FPS, float(settings.get("fps", 30)))
     args.output.mkdir(parents=True, exist_ok=True)
+    dataset_root = args.output.parents[1]
+    for folder in (
+        dataset_root / "labels" / "raw",
+        dataset_root / "images" / "train",
+        dataset_root / "images" / "val",
+        dataset_root / "images" / "test",
+        dataset_root / "labels" / "train",
+        dataset_root / "labels" / "val",
+        dataset_root / "labels" / "test",
+    ):
+        folder.mkdir(parents=True, exist_ok=True)
     log_path = args.output / "采集记录.csv"
     new_log = not log_path.exists()
     log = log_path.open("a", newline="", encoding="utf-8-sig")
@@ -79,10 +90,12 @@ def main() -> int:
                 cv2.namedWindow(window, cv2.WINDOW_NORMAL)
             elif key == 32:
                 name = classes[selected]
-                folder = args.output / name
-                folder.mkdir(parents=True, exist_ok=True)
-                filename = f"{name}_{time.strftime('%Y%m%d_%H%M%S')}_{time.time_ns() % 1000000:06d}.jpg"
-                path = folder / filename
+                existing = list(args.output.glob(f"{name}_*.jpg"))
+                number = len(existing) + 1
+                while (args.output / f"{name}_{number:04d}.jpg").exists():
+                    number += 1
+                filename = f"{name}_{number:04d}.jpg"
+                path = args.output / filename
                 cv2.imwrite(str(path), frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
                 writer.writerow([str(path.relative_to(args.output)), name, index, frame.shape[1], frame.shape[0], time.time()])
                 log.flush()
