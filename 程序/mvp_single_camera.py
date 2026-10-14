@@ -17,11 +17,12 @@ except ModuleNotFoundError as exc:
     raise SystemExit(2) from exc
 
 
-ROOT = Path(__file__).resolve().parent
-CALIBRATION_PATH = ROOT / "config" / "tray_calibration.json"
-OBJECTS_PATH = ROOT / "config" / "objects.json"
-CAMERA_SETTINGS_PATH = ROOT / "config" / "camera_settings.json"
-CAMERA_ROLES_PATH = ROOT / "config" / "camera_roles.json"
+ROOT = Path(__file__).resolve().parent.parent
+CONFIG_DIR = ROOT / "配置"
+CALIBRATION_PATH = CONFIG_DIR / "tray_calibration.json"
+OBJECTS_PATH = CONFIG_DIR / "objects.json"
+CAMERA_SETTINGS_PATH = CONFIG_DIR / "camera_settings.json"
+CAMERA_ROLES_PATH = CONFIG_DIR / "camera_roles.json"
 REPORT_PATH = ROOT / "reports" / "latest_detections.json"
 CAPTURE_DIR = ROOT / "captures"
 
@@ -246,7 +247,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
     parser.add_argument("--fps", type=int, default=30)
-    parser.add_argument("--weights", default="yolo11n.pt", help="YOLO权重路径")
+    parser.add_argument("--weights", default=str(ROOT / "权重" / "yolo11n.pt"), help="YOLO权重路径")
     parser.add_argument("--objects-config", type=Path, default=OBJECTS_PATH)
     parser.add_argument("--tray-width-mm", type=float, default=300.0)
     parser.add_argument("--tray-height-mm", type=float, default=300.0)
@@ -255,7 +256,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--headless", action="store_true", help="不打开窗口，适合离线检查")
     parser.add_argument("--frames", type=int, default=0, help="无窗口读取指定帧数；用于相机连通性测试")
     parser.add_argument("--snapshot", type=Path, help="无窗口采集时保存最后一帧")
-    parser.add_argument("--apply-camera-settings", action="store_true", help="明确要求应用 config/camera_settings.json")
+    parser.add_argument("--apply-camera-settings", action="store_true", help="明确要求应用 配置/camera_settings.json")
     parser.add_argument("--self-test", action="store_true", help="运行逻辑自检后退出")
     return parser.parse_args()
 
@@ -324,7 +325,7 @@ def main() -> int:
     if args.apply_camera_settings:
         settings = load_json(CAMERA_SETTINGS_PATH, {})
         settings.update({"width": args.width, "height": args.height, "fps": args.fps})
-        temporary_settings_path = ROOT / "config" / ".camera_settings_runtime.json"
+        temporary_settings_path = CONFIG_DIR / ".camera_settings_runtime.json"
         save_json(temporary_settings_path, settings)
         readback = apply_camera_settings(camera, temporary_settings_path)
         temporary_settings_path.unlink(missing_ok=True)

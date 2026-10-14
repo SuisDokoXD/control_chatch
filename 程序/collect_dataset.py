@@ -10,7 +10,7 @@ from pathlib import Path
 
 import cv2
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def load_json(path: Path, default: dict) -> dict:
@@ -30,10 +30,10 @@ def main() -> int:
     classes = [x.strip() for x in args.classes.split(",") if x.strip()]
     if not 1 <= len(classes) <= 9:
         raise SystemExit("类别数量必须为1到9个")
-    roles = load_json(ROOT / "config" / "camera_roles.json", {})
+    roles = load_json(ROOT / "配置" / "camera_roles.json", {})
     role = roles.get(args.role, {})
     index = args.camera if args.camera is not None else int(role.get("index", 0))
-    settings = load_json(ROOT / "config" / "camera_settings.json", {})
+    settings = load_json(ROOT / "配置" / "camera_settings.json", {})
     cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
     if not cap.isOpened():
         raise SystemExit(f"无法打开摄像头编号 {index}")

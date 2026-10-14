@@ -11,7 +11,7 @@
 ## 快捷拍照采集
 
 ```powershell
-.\.venv\Scripts\python.exe collect_dataset.py --classes cube
+.\.venv\Scripts\python.exe .\程序\collect_dataset.py --classes cube
 ```
 
 也可以直接双击项目根目录的 `启动数据集采集.cmd`，或运行 `启动数据集采集.ps1`；两者都会启动 `cube` 类别采集。
@@ -27,16 +27,16 @@ py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-把 `yolo11n.pt` 放在项目根目录，或者通过 `--weights` 指定权重。没有权重时程序仍可用于预览、拍照和标定。先探测相机编号：
+预训练权重放在 `权重/yolo11n.pt`，也可以通过 `--weights` 指定其他权重。没有权重时程序仍可用于预览、拍照和标定。先探测相机编号：
 
 ```powershell
-.\.venv\Scripts\python.exe camera_probe.py
+.\.venv\Scripts\python.exe .\程序\camera_probe.py
 ```
 
 ## 运行
 
 ```powershell
-.\.venv\Scripts\python.exe mvp_single_camera.py --camera 0 --weights .\yolo11n.pt
+.\.venv\Scripts\python.exe .\程序\mvp_single_camera.py --camera 0 --weights .\权重\yolo11n.pt
 ```
 
 常用按键：
@@ -49,20 +49,20 @@ py -m venv .venv
 没有相机时也可以先运行逻辑自检：
 
 ```powershell
-.\.venv\Scripts\python.exe mvp_single_camera.py --self-test
+.\.venv\Scripts\python.exe .\程序\mvp_single_camera.py --self-test
 ```
 
 处理一张已经拍好的图片，不打开摄像头：
 
 ```powershell
-.\.venv\Scripts\python.exe mvp_single_camera.py --image .\captures\test.jpg --headless --weights .\yolo11n.pt
+.\.venv\Scripts\python.exe .\程序\mvp_single_camera.py --image .\captures\test.jpg --headless --weights .\权重\yolo11n.pt
 ```
 
-相机逻辑名称保存在 `config/camera_roles.json`：`vertical → 设备编号 0 → LRCP USB3.0`。物理 USB 端口不能改名；如果 Windows 拔插后改变设备编号，修改这个配置即可，也可以临时使用 `--camera` 覆盖。
+相机逻辑名称保存在 `配置/camera_roles.json`：`vertical → 设备编号 0 → LRCP USB3.0`。物理 USB 端口不能改名；如果 Windows 拔插后改变设备编号，修改这个配置即可，也可以临时使用 `--camera` 覆盖。
 
-相机参数模板保存在 `config/camera_settings.json`。程序默认只设置分辨率、帧率和 MJPG，不修改曝光、增益或白平衡。摆好垂直相机后，明确加入 `--apply-camera-settings` 才会应用模板中的参数；最终值需要根据托盘和物块画面复核。
+相机参数模板保存在 `配置/camera_settings.json`。程序默认只设置分辨率、帧率和 MJPG，不修改曝光、增益或白平衡。摆好垂直相机后，明确加入 `--apply-camera-settings` 才会应用模板中的参数；最终值需要根据托盘和物块画面复核。
 
-标定结果保存在 `config/tray_calibration.json`，识别结果保存在 `reports/latest_detections.json`。标定文件被 `.gitignore` 忽略，因为它属于现场设备参数。
+标定结果保存在 `配置/tray_calibration.json`，识别结果保存在 `reports/latest_detections.json`。标定文件被 `.gitignore` 忽略，因为它属于现场设备参数。
 
 ## 当前输出
 
@@ -79,7 +79,7 @@ py -m venv .venv
 }
 ```
 
-在 `config/objects.json` 中填写实际物块高度后，程序会按形状输出 `z_mm`。机械臂接口目前使用模拟输出。
+在 `配置/objects.json` 中填写实际物块高度后，程序会按形状输出 `z_mm`。机械臂接口目前使用模拟输出。
 
 例如：
 

@@ -7,4 +7,5 @@ reports/
 config/tray_calibration.json
 *.pt
 *.onnx
+配置_旧兼容备份/
 
