@@ -8,6 +8,14 @@
 
 三相机联动、双目测高、真实机械臂通信不在这个版本中。它们会在单相机链路稳定后接入。
 
+## 快捷拍照采集
+
+```powershell
+.\.venv\Scripts\python.exe collect_dataset.py --classes cube
+```
+
+窗口中按 `1`～`9` 选择类别，按空格保存，按 `N` 新增类别，按 `Q` 退出。照片会保存到 `dataset/raw/类别名/`，并写入 `dataset/raw/采集记录.csv`。多个类别可写成 `--classes cube,cylinder,sphere`。
+
 ## 安装
 
 在项目目录中创建或使用虚拟环境：
