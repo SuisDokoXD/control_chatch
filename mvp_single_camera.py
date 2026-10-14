@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent
 CALIBRATION_PATH = ROOT / "config" / "tray_calibration.json"
 OBJECTS_PATH = ROOT / "config" / "objects.json"
 CAMERA_SETTINGS_PATH = ROOT / "config" / "camera_settings.json"
+CAMERA_ROLES_PATH = ROOT / "config" / "camera_roles.json"
 REPORT_PATH = ROOT / "reports" / "latest_detections.json"
 CAPTURE_DIR = ROOT / "captures"
 
@@ -239,7 +240,8 @@ def detect(frame: np.ndarray, model: Any, matrix: np.ndarray | None, heights: di
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="单相机智能分拣视觉最小运行版本")
-    parser.add_argument("--camera", type=int, default=0, help="OpenCV摄像头编号")
+    parser.add_argument("--camera", type=int, default=None, help="临时覆盖摄像头编号；默认读取角色配置")
+    parser.add_argument("--role", default="vertical", help="逻辑相机角色，默认 vertical")
     parser.add_argument("--image", type=Path, help="离线处理单张图片，不打开摄像头")
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
@@ -300,6 +302,10 @@ def main() -> int:
     if args.self_test:
         return run_self_test()
     CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+    roles = load_json(CAMERA_ROLES_PATH, {})
+    role_config = roles.get(args.role, {}) if isinstance(roles, dict) else {}
+    camera_index = args.camera if args.camera is not None else int(role_config.get("index", 0))
+    device_name = str(role_config.get("device_name", "unknown"))
     calibration = load_calibration(CALIBRATION_PATH)
     heights = object_heights(args.objects_config)
     weights = Path(args.weights)
@@ -314,7 +320,7 @@ def main() -> int:
         return 2
 
     backend = cv2.CAP_DSHOW if hasattr(cv2, "CAP_DSHOW") else 0
-    camera = cv2.VideoCapture(args.camera, backend)
+    camera = cv2.VideoCapture(camera_index, backend)
     if args.apply_camera_settings:
         settings = load_json(CAMERA_SETTINGS_PATH, {})
         settings.update({"width": args.width, "height": args.height, "fps": args.fps})
@@ -330,7 +336,7 @@ def main() -> int:
         camera.set(cv2.CAP_PROP_FPS, args.fps)
         print("仅设置分辨率/帧率，未修改曝光、增益或白平衡。")
     if not camera.isOpened():
-        print(f"无法打开摄像头编号 {args.camera}。可先运行 camera_probe.py 检查设备。")
+        print(f"无法打开 {args.role}（设备编号 {camera_index}，{device_name}）。可先运行 camera_probe.py 检查设备。")
         return 2
     if args.headless:
         captured = 0
@@ -377,7 +383,13 @@ def main() -> int:
                 cv2.imwrite(str(path), frame)
                 print(f"图片已保存: {path}")
             elif key == ord("p"):
-                payload = {"timestamp": time.time(), "camera": args.camera, "detections": latest}
+                payload = {
+                    "timestamp": time.time(),
+                    "role": args.role,
+                    "camera_index": camera_index,
+                    "device_name": device_name,
+                    "detections": latest,
+                }
                 save_json(REPORT_PATH, payload)
                 print(f"识别结果已保存: {REPORT_PATH}")
     finally:
