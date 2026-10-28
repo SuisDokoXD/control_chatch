@@ -14,6 +14,9 @@ import cv2
 import numpy as np
 
 from scripts.vision_workspace import work_area_polygon_px, workspace_source
+from scripts.live_ui import (atomic_json, build_panorama, build_workspace_view,
+                             choose_exposure, clamp_exposure, open_cameras, read_pair,
+                             windows_gone)
 
 NAMES = {
     "ball": "球体", "cube": "正方体", "cuboid": "长方体", "cylinder": "圆柱",
@@ -70,13 +73,6 @@ def segment_pair(api, frames, refs, cal, threshold, min_area, fixture=None):
     return masks
 
 
-def atomic_json(path, value):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(path.suffix + ".tmp")
-    temp.write_text(json.dumps(value, ensure_ascii=False, allow_nan=False, indent=2) + "\n",
-                    encoding="utf-8")
-    temp.replace(path)
 
 
 def object_is_current(item, masks):
@@ -167,15 +163,14 @@ def run_live(api, args, cal):
     fixture = cv2.imread(str(fixture_path), 0) if fixture_path.exists() else None
     if fixture is not None:
         fixture = cv2.dilate((fixture > 0).astype(np.uint8), np.ones((15, 15), np.uint8))
-    settings, roles = api.camera_config.load_settings(), api.camera_config.load_roles()
-    caps, resolved = {}, {}
     root = args.session_dir
     if root:
         root.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     wall_started = time.time()
     chinese = api.overlay_text.available()
-    window = "Two-view OpenCV | q:quit s:save"
+    window_panorama = "2 全景（俯视 | 侧视）  q 退出  s 存图  e 重新选曝光"
+    window_workspace = "3 识别区域（四点工作区内）"
     cv2.setNumThreads(1)
     executor = ProcessPoolExecutor(max_workers=1)
     pending = None
@@ -188,40 +183,38 @@ def run_live(api, args, cal):
     atomic_json(live_json, [])
     atomic_json(status_json, {"state": "starting", "updated_unix": time.time()})
     try:
-        for role, _ in api.ROLES:
-            config = api.camera_config.resolve(settings, role, roles.get(role, {}).get("index"))
-            config.update(auto_exposure=False, exposure=args.exposure)
-            cap = api.open_camera(config)
-            if cap is None:
-                raise RuntimeError(f"Cannot open camera {role}")
-            caps[role] = cap
-            resolved[role] = dict(config, actual_width=cap.get(cv2.CAP_PROP_FRAME_WIDTH),
-                                   actual_height=cap.get(cv2.CAP_PROP_FRAME_HEIGHT),
-                                   actual_exposure=cap.get(cv2.CAP_PROP_EXPOSURE),
-                                   actual_fourcc=int(cap.get(cv2.CAP_PROP_FOURCC)))
+        exposure = clamp_exposure(args.exposure)
+        caps, resolved = open_cameras(api, exposure)
+        if not args.skip_exposure_picker:
+            chosen = choose_exposure(api, caps, cal, refs, fixture, exposure, args, chinese)
+            caps, refs, fixture = chosen["caps"], chosen["refs"], chosen["fixture"]
+            exposure = chosen["exposure"]
+            if chosen["aborted"]:
+                return 0
         if root:
             atomic_json(root / "session.json", {"cameras": resolved,
-                        "calibration": str(args.calibration.resolve()), "references": str(args.ref_dir.resolve()),
+                        "calibration": str(args.calibration.resolve()),
+                        "references": str(args.ref_dir.resolve()),
                         "started_unix": wall_started, "chinese_font": chinese,
+                        "exposure": exposure,
                         "max_result_age_s": args.max_result_age,
                         "workspace_source": workspace_source(cal),
                         "workspace_polygon_px": work_area_polygon_px(cal).tolist()})
             stream = (root / "telemetry.jsonl").open("a", encoding="utf-8")
-        print(json.dumps({"event": "cameras_open", "cameras": resolved}, ensure_ascii=False), flush=True)
-        cv2.namedWindow(window, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window, args.width, int(args.width * 0.54))
+        print(json.dumps({"event": "cameras_open", "cameras": resolved, "exposure": exposure},
+                         ensure_ascii=False), flush=True)
+        cv2.namedWindow(window_panorama, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(window_workspace, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(window_panorama, 1400, 525)
+        cv2.resizeWindow(window_workspace, 1000, 720)
+        cv2.moveWindow(window_panorama, 0, 40)
+        cv2.moveWindow(window_workspace, 760, 40)
         # All fit results carry the exact acquisition timestamp and scene signature.
         last_read = time.perf_counter()
         while not args.seconds or time.perf_counter() - started < args.seconds:
             tick = time.perf_counter()
             # Sequential grab/retrieve limits call skew, not hardware exposure synchronisation.
-            grabs = {role: cap.grab() for role, cap in caps.items()}
-            frames = {}
-            for role, cap in caps.items():
-                ok, image = cap.retrieve() if grabs[role] else (False, None)
-                if not ok or image is None:
-                    raise RuntimeError(f"Camera read failed: {role}")
-                frames[role] = image
+            frames = read_pair(caps)
             acquired = time.perf_counter()
             masks = segment_pair(api, frames, refs, cal, args.thr, args.min_area, fixture)
             sig = mask_signature(masks)
@@ -255,54 +248,24 @@ def run_live(api, args, cal):
                                approach_clearance_mm=args.approach_clearance_mm)
                 pending = executor.submit(solve_frame, frames, masks, sig, acquired,
                                           cal, options, root, started)
-            canvases = {role: cv2.resize(frame, (750, 562)) for role, frame in frames.items()}
             work_polygon = work_area_polygon_px(cal, frames["vertical"].shape)
-            work_scale = np.array([750 / frames["vertical"].shape[1],
-                                   562 / frames["vertical"].shape[0]])
-            cv2.polylines(canvases["vertical"],
-                          [np.rint(work_polygon * work_scale).astype(np.int32)], True, (255, 220, 0), 2)
-            workspace_label = ("手动四点工作区" if chinese else "Manual 4-point workspace") if workspace_source(cal).startswith("manual:") else "Calibrated floor workspace"
-            canvases["vertical"] = api.overlay_text.draw_text(canvases["vertical"], workspace_label,
-                                                              (12, 5), 19, (255, 220, 0))
-            # Current masks are always shown, including while fitting or invalidated.
-            for role in canvases:
-                contours, _ = cv2.findContours(masks[role], cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                scale = np.array([750 / frames[role].shape[1], 562 / frames[role].shape[0]])
-                for contour in contours:
-                    if cv2.contourArea(contour) >= args.min_area:
-                        cv2.drawContours(canvases[role], [np.rint(contour * scale).astype(np.int32)], -1, (0, 180, 255), 1)
+            workspace_label = ("手动四点工作区" if chinese else "manual 4-point workspace") \
+                if workspace_source(cal).startswith("manual:") else \
+                ("黑点平底工作区" if chinese else "calibrated floor workspace")
+            panorama = build_panorama(api, frames, masks, work_polygon, args.min_area,
+                                      workspace_label, chinese)
+            head = (f"{state} | fit {fit_ms:.0f}ms | 曝光 {exposure:+.1f} | "
+                    f"源帧 {now - source_time:.1f}s 前" if source_signature else
+                    "正在拟合第一帧，暂无有效目标")
+            status_lines = [head]
             for item in visible:
-                c = item.contour_px
-                x, y, _, _ = cv2.boundingRect(c)
-                x, y = round(x * 750 / frames["vertical"].shape[1]), round(y * 562 / frames["vertical"].shape[0])
-                color = (0, 230, 0) if item.geometry_verified else (0, 180, 255)
-                title = display_name(item, chinese)
-                status = ("已拟合" if item.geometry_verified else "几何未验证") if chinese else ("fit OK" if item.geometry_verified else "geometry unverified")
-                name = f"#{item.rank or '-'} {title} {status}"
-                canvases["vertical"] = api.overlay_text.draw_text(canvases["vertical"], name, (max(0, x - 10), max(24, y - 48)), 19, color)
-                if item.geometry_verified:
-                    text = f"x{item.footprint.center_mm[0]:.1f} y{item.footprint.center_mm[1]:.1f} H{item.height_mm:.1f}mm"
-                else:
-                    text = "H/XYZ HOLD - diagnostic estimate only"
-                canvases["vertical"] = api.overlay_text.draw_text(canvases["vertical"], text, (max(0, x - 10), max(45, y - 25)), 16, color)
-                if item.association.mask is not None:
-                    side_contours, _ = cv2.findContours(item.association.mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    if side_contours:
-                        bx, by, _, _ = cv2.boundingRect(max(side_contours, key=cv2.contourArea))
-                        sx = max(0, round(bx * 750 / frames["side_a"].shape[1]) - 10)
-                        sy = max(24, round(by * 562 / frames["side_a"].shape[0]) - 25)
-                        canvases["side_a"] = api.overlay_text.draw_text(canvases["side_a"], name, (sx, sy), 19, color)
-            combo = np.hstack([canvases["vertical"], canvases["side_a"]])
-            footer = np.zeros((max(100, 30 * len(visible) + 65), 1500, 3), np.uint8)
-            label = f"vertical cam{resolved['vertical']['index']} | side cam{resolved['side_a']['index']} | {state} | fit {fit_ms:.0f}ms | source age {now-source_time:.1f}s" if source_signature else "Fitting first source - no valid targets yet"
-            footer = api.overlay_text.draw_text(footer, label, (10, 5), 19, (255, 255, 255))
-            for index, item in enumerate(visible):
                 reasons = "; ".join(item.rejection_reasons)
-                if not chinese:
-                    reasons = ", ".join(["class/geometry/tool/robot gates: HOLD"] if reasons else ["perception candidate only"])
-                footer = api.overlay_text.draw_text(footer, f"{display_name(item, chinese)}: {reasons}", (10, 34 + index * 30), 17, (0, 180, 255))
-            combo = np.vstack([combo, footer])
-            cv2.imshow(window, cv2.resize(combo, (args.width, round(combo.shape[0] * args.width / 1500))))
+                status_lines.append(f"{display_name(item, chinese)}: {reasons or '可抓候选'}")
+            workspace_view = build_workspace_view(api, frames, masks, visible, work_polygon,
+                                                  args.min_area, chinese, status_lines,
+                                                  display_name)
+            cv2.imshow(window_panorama, panorama)
+            cv2.imshow(window_workspace, workspace_view)
             count = int(sum(cv2.contourArea(c) >= args.min_area for c in cv2.findContours(masks['vertical'], cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]))
             telemetry = {"elapsed_s": now - started, "frame": frame_count, "state": state,
                          "segmentation_count": count, "fit_ms": fit_ms,
@@ -322,12 +285,15 @@ def run_live(api, args, cal):
                 last_publish = now
             save = root and now - last_sample >= args.sample_interval and sample_index < args.sample_limit
             if save:
+                while (root / "samples" / f"{sample_index:04d}").exists():
+                    sample_index += 1        # 复用 --session-dir 时接着往后编号，不覆盖旧证据
                 folder = root / "samples" / f"{sample_index:04d}"
                 folder.mkdir(parents=True, exist_ok=False)
                 for role in frames:
                     cv2.imwrite(str(folder / f"{role}.jpg"), frames[role], [cv2.IMWRITE_JPEG_QUALITY, 98])
                     cv2.imwrite(str(folder / f"{role}_mask.png"), masks[role] * 255)
-                cv2.imwrite(str(folder / "overlay.jpg"), combo)
+                cv2.imwrite(str(folder / "panorama.jpg"), panorama)
+                cv2.imwrite(str(folder / "workspace.jpg"), workspace_view)
                 atomic_json(folder / "capture.json", telemetry)
                 sample_index += 1
                 last_sample = now
@@ -337,8 +303,17 @@ def run_live(api, args, cal):
             if key == ord('s'):
                 target = root or api.ROOT / "captures" / "preview"
                 target.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(str(target / f"two_view_{time.time_ns()}.jpg"), combo)
-            if cv2.getWindowProperty(window, cv2.WND_PROP_VISIBLE) < 1:
+                cv2.imwrite(str(target / f"panorama_{time.time_ns()}.jpg"), panorama)
+                cv2.imwrite(str(target / f"workspace_{time.time_ns()}.jpg"), workspace_view)
+            if key == ord('e'):
+                chosen = choose_exposure(api, caps, cal, refs, fixture, exposure, args, chinese)
+                caps, refs = chosen["caps"], chosen["refs"]
+                if chosen["fixture"] is not None:
+                    fixture = chosen["fixture"]
+                exposure = chosen["exposure"]
+                if chosen["aborted"]:
+                    break
+            if windows_gone(window_panorama, window_workspace):
                 break
             frame_count += 1
             last_read = acquired

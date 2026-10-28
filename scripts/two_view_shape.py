@@ -158,6 +158,25 @@ def foreground(cur: np.ndarray, ref: np.ndarray, thr: float, min_area: int) -> n
             keep[lab == i] = 1
     return keep
 
+def reference_self_check(last_frame, reference, floor_polygon, thr, min_area,
+                         fixture_max_area):
+    """空盘参照自检：平底内还有大结构就拒绝写入。
+
+    --capture-ref 与实时里的“重采空盘”共用这一份判据，避免两套标准。
+    """
+    floor_roi = np.zeros(last_frame.shape[:2], np.uint8)
+    cv2.fillConvexPoly(floor_roi, np.rint(np.asarray(floor_polygon)).astype(np.int32), 1)
+    residual = foreground(last_frame, reference, thr, min_area)
+    structure = structure_foreground(last_frame, floor_roi)
+    residual = (residual | structure) & (floor_roi > 0).astype(np.uint8)
+    count, _, stats, _ = cv2.connectedComponentsWithStats(residual, 8)
+    big = [int(stats[i, cv2.CC_STAT_AREA]) for i in range(1, count)
+           if stats[i, cv2.CC_STAT_AREA] >= max(min_area, fixture_max_area)]
+    small = [int(stats[i, cv2.CC_STAT_AREA]) for i in range(1, count)
+             if stats[i, cv2.CC_STAT_AREA] >= min_area]
+    return big, small, structure
+
+
 def tray_floor_polygon_px(cal: dict, extra_margin_mm: float = 0.0) -> np.ndarray:
     """Use the four black-dot FLOOR corners, not an outer-rim inset.
 
@@ -1025,6 +1044,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sample-limit", type=int, default=40)
     parser.add_argument("--max-result-age", type=float, default=8.0,
                         help="拟合来源帧最大时效(秒)，超时撤销目标")
+    parser.add_argument("--skip-exposure-picker", action="store_true",
+                        help="跳过启动时的选光照步骤，直接用 --exposure")
     args = parser.parse_args(argv)
     if (not np.all(np.isfinite([args.fit_interval, args.max_result_age, args.sample_interval]))
             or args.max_result_age <= 0 or args.sample_interval <= 0 or args.sample_limit < 0):
@@ -1081,21 +1102,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.capture_ref:
         references, lasts = capture_reference(args.exposure)
-        floor_roi = np.zeros(lasts["vertical"].shape[:2], np.uint8)
-        cv2.fillConvexPoly(floor_roi, np.rint(roi_px).astype(np.int32), 1)
-        residual = foreground(lasts["vertical"], references["vertical"],
-                              args.thr, args.min_area)
-        structure = structure_foreground(lasts["vertical"], floor_roi)
-        residual = (residual | structure) & (floor_roi > 0).astype(np.uint8)
-        count, _, stats, _ = cv2.connectedComponentsWithStats(residual, 8)
-        left = [int(stats[i, cv2.CC_STAT_AREA]) for i in range(1, count)
-                if stats[i, cv2.CC_STAT_AREA] >= max(args.min_area, args.fixture_max_area)]
-        if left:
-            print(f"参照帧自检失败：平底内仍能看到物块 {left}，"
+        big, small, structure = reference_self_check(
+            lasts["vertical"], references["vertical"], roi_px,
+            args.thr, args.min_area, args.fixture_max_area)
+        if big:
+            print(f"参照帧自检失败：平底内仍能看到物块 {big}，"
                   f"未写入参照帧；请清空托盘并保持不动后重采", file=sys.stderr)
             return 3
-        small = [int(stats[i, cv2.CC_STAT_AREA]) for i in range(1, count)
-                 if stats[i, cv2.CC_STAT_AREA] >= args.min_area]
         REF_DIR.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(REF_DIR / "ref_static_vertical.png"), structure * 255)
         if small:
