@@ -1,0 +1,6 @@
+transport: fake
+serial_port: null
+baudrate: 115200
+ack_timeout_s: 3.0
+safe_observation_pose: null
+boxes: {}

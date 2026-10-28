@@ -18,14 +18,21 @@ def main() -> int:
     parser.add_argument("--max-index", type=int, default=9)
     parser.add_argument("--show", action="store_true", help="显示每个可用设备的短暂预览")
     args = parser.parse_args()
-    backend = cv2.CAP_DSHOW if hasattr(cv2, "CAP_DSHOW") else 0
+    backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]
     found = 0
     for index in range(args.max_index + 1):
-        cap = cv2.VideoCapture(index, backend)
-        if not cap.isOpened():
-            cap.release()
+        cap = None
+        ok, frame = False, None
+        for backend in dict.fromkeys(backends):
+            candidate = cv2.VideoCapture(index, backend)
+            if candidate.isOpened():
+                ok, frame = candidate.read()
+                if ok and frame is not None:
+                    cap = candidate
+                    break
+            candidate.release()
+        if cap is None:
             continue
-        ok, frame = cap.read()
         if ok and frame is not None:
             found += 1
             print(f"设备编号 {index}: {frame.shape[1]}x{frame.shape[0]}, 实际FPS约 {cap.get(cv2.CAP_PROP_FPS):.1f}")

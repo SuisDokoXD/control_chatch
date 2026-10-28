@@ -1,11 +1,22 @@
 {
-  "width": 1920,
-  "height": 1080,
-  "fps": 30,
+  "width": 2592,
+  "height": 1944,
+  "fps": null,
   "fourcc": "MJPG",
   "auto_exposure": false,
-  "exposure": -6,
+  "exposure": -4,
   "gain": null,
-  "auto_white_balance": false,
-  "white_balance": 4600
+  "auto_white_balance": true,
+  "white_balance": null,
+  "per_camera": {
+    "vertical": {
+      "index": 1,
+      "exposure": -4
+    },
+    "side_a": {
+      "index": 2,
+      "exposure": -4
+    }
+  },
+  "note": "顶层键=所有相机的默认值；per_camera.<角色> 只覆盖那一台（由 程序/camera_config.py 解析，老格式仍兼容）。per_camera 的 index 必须与 配置/camera_roles.json 一致（当前 vertical=1、side_a=2），否则不传角色编号的脚本会开错相机。曝光：2026-10-24 打灯时实测 -7；2026-10-27 当前灯光下 -7 几乎全黑、-3 过曝(34%~42%)、-4 最接近(均值约176/161、过曝<2%)，故默认改为 -4。换灯或换机器必须重扫：scripts/tune_camera_exposure.py --index 1 --index 2。白平衡必须自动——这两台相机的 CAP_PROP_WB_TEMPERATURE 完全无效（2800K~6500K 输出一致），自动白平衡给出 a=-2、b=+1 且 20 帧零漂移。"
 }

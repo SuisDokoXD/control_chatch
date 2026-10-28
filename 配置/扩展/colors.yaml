@@ -1,0 +1,8 @@
+# Thresholds stay empty until the final camera and light are calibrated.
+colors:
+  red: {hue: null, saturation_min: null, value_min: null}
+  yellow: {hue: null, saturation_min: null, value_min: null}
+  blue: {hue: null, saturation_min: null, value_min: null}
+  green: {hue: null, saturation_min: null, value_min: null}
+  black: {hue: null, saturation_min: null, value_min: null}
+  white: {hue: null, saturation_min: null, value_min: null}

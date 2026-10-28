@@ -13,6 +13,18 @@ import cv2
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def open_camera(index: int):
+    backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]
+    for backend in dict.fromkeys(backends):
+        cap = cv2.VideoCapture(index, backend)
+        if cap.isOpened():
+            ok, _ = cap.read()
+            if ok:
+                return cap
+        cap.release()
+    return None
+
+
 def load_json(path: Path, default: dict) -> dict:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -27,6 +39,8 @@ def main() -> int:
     parser.add_argument("--camera", type=int, default=None)
     parser.add_argument("--role", default="vertical")
     args = parser.parse_args()
+    if not args.output.is_absolute():
+        args.output = ROOT / args.output
     classes = [x.strip() for x in args.classes.split(",") if x.strip()]
     if not 1 <= len(classes) <= 9:
         raise SystemExit("类别数量必须为1到9个")
@@ -34,9 +48,9 @@ def main() -> int:
     role = roles.get(args.role, {})
     index = args.camera if args.camera is not None else int(role.get("index", 0))
     settings = load_json(ROOT / "配置" / "camera_settings.json", {})
-    cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
-    if not cap.isOpened():
-        raise SystemExit(f"无法打开摄像头编号 {index}")
+    cap = open_camera(index)
+    if cap is None:
+        raise SystemExit(f"无法打开摄像头编号 {index}（已尝试 DirectShow、Media Foundation 和默认后端）")
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*str(settings.get("fourcc", "MJPG"))[:4]))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, float(settings.get("width", 1920)))
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(settings.get("height", 1080)))
@@ -60,8 +74,8 @@ def main() -> int:
     if new_log:
         writer.writerow(["filename", "class", "camera_index", "width", "height", "timestamp"])
     selected = 0
-    window = "数据集快捷拍照"
-    print("1-9选择类别；空格保存；N新增类别；Q或Esc退出")
+    window = "Dataset Capture"
+    print("Keys: 1-9 select class; SPACE save; N add class; Q/ESC quit")
     print(" | ".join(f"{i + 1}:{x}" for i, x in enumerate(classes)))
     try:
         while True:
@@ -70,7 +84,7 @@ def main() -> int:
                 print("读取摄像头失败")
                 return 2
             canvas = frame.copy()
-            text = f"类别: {classes[selected]} | SPACE保存 | N新增 | Q退出"
+            text = f"Class: {classes[selected]} | SPACE save | N add | Q quit"
             cv2.rectangle(canvas, (0, 0), (canvas.shape[1], 44), (20, 20, 20), -1)
             cv2.putText(canvas, text, (14, 29), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
             scale = min(1280 / canvas.shape[1], 1.0)
@@ -80,10 +94,10 @@ def main() -> int:
                 break
             if ord("1") <= key <= ord("9") and key - ord("1") < len(classes):
                 selected = key - ord("1")
-                print(f"当前类别: {classes[selected]}")
+                print(f"Selected class: {classes[selected]}")
             elif key == ord("n"):
                 cv2.destroyWindow(window)
-                value = input("输入类别名称：").strip()
+                value = input("Class name: ").strip()
                 if value and value not in classes and len(classes) < 9:
                     classes.append(value)
                     selected = len(classes) - 1

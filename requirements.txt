@@ -1,4 +1,6 @@
-opencv-python>=4.8
+opencv-python>=4.8,<5
 numpy>=1.24
 ultralytics>=8.3
+Pillow>=10  # 中文类别标注（缺了会退回 cv2.putText，中文变 ??）
+scipy>=1.11,<2  # Offline calibrated two-view silhouette model fitting
 

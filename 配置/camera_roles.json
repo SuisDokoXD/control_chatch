@@ -1,7 +1,17 @@
 {
   "vertical": {
-    "index": 0,
-    "device_name": "LRCP USB3.0",
-    "description": "当前用于垂直视角调试的主相机"
+    "index": 1,
+    "device_name": "2592x1944 MJPG (DSHOW)",
+    "description": "垂直（俯视托盘）相机；2026-10-26 重新确认编号 1（原标为 2，10-24 记录有误）。依据：平板平放托盘时这一路看板子正对——宽高比 1.79≈板本身 1.80、横向/纵向都是 12.1 px/mm"
+  },
+  "side_a": {
+    "index": 2,
+    "device_name": "2592x1944 YUY2 (DSHOW)",
+    "description": "侧视（斜视托盘）相机；2026-10-26 重新确认编号 2（原标为 1）。依据：看板子明显斜——宽高比 2.19、纵向压缩 0.79、梯形上边 1919px/下边 2507px"
+  },
+  "side_b": {
+    "index": null,
+    "device_name": null,
+    "description": "第二台侧面相机；实际设备编号待配置"
   }
 }

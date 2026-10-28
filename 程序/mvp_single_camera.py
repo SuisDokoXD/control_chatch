@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -194,6 +195,9 @@ def load_model(weights: Path, disabled: bool):
         print(f"未找到权重 {weights}，当前仅运行采集、颜色和标定。")
         return None
     try:
+        settings_dir = ROOT / "reports" / "ultralytics"
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("YOLO_CONFIG_DIR", str(settings_dir))
         from ultralytics import YOLO
 
         model = YOLO(str(weights))

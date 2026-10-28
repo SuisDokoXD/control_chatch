@@ -4,8 +4,21 @@ __pycache__/
 captures/
 dataset/
 reports/
-config/tray_calibration.json
+配置/tray_calibration.json
 *.pt
 *.onnx
 配置_旧兼容备份/
+runs/
+ultralytics_config/
+pip-*/
 
+# 本机生成/体积大的内容，不进仓库（迁移说明见 文档/迁移到新电脑.md）
+dataset_backup_*/
+dataset_backup_*
+model/
+权重/
+tmp/
+比赛资料/
+.pi/
+.workflow/knowledge-inbox/*
+!.workflow/knowledge-inbox/.gitignore

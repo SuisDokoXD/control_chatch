@@ -1,0 +1,36 @@
+# YOLO only learns geometric shape. Color is classified separately in colors.yaml.
+shapes:
+  0: circle
+  1: square
+  2: rectangle
+  3: triangle
+
+# Replace the candidate colors and dimensions after real-material inspection.
+# One shape may have 7-8 colors; do not create one YOLO class per color.
+objects:
+  circle:
+    shape: circle
+    colors: [red, yellow, blue, green, black, white, orange, purple]
+    size_mm: null
+    height_mm: null
+    target_box_by_color: {}
+  square:
+    shape: square
+    colors: [red, yellow, blue, green, black, white, orange, purple]
+    size_mm: null
+    height_mm: null
+    target_box_by_color: {}
+  rectangle:
+    shape: rectangle
+    colors: [red, yellow, blue, green, black, white, orange, purple]
+    size_mm: null
+    height_mm: null
+    target_box_by_color: {}
+  triangle:
+    shape: triangle
+    colors: [red, yellow, blue, green, black, white, orange, purple]
+    size_mm: null
+    height_mm: null
+    target_box_by_color: {}
+
+  
